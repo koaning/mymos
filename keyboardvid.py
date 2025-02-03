@@ -11,6 +11,7 @@
 #     "opencv-python==4.11.0.86",
 #     "pydantic==2.10.6",
 #     "python-dotenv==1.0.1",
+#     "wigglystuff==0.1.9",
 #     "yt-dlp==2025.1.26",
 # ]
 # ///
@@ -54,30 +55,30 @@ def _():
 @app.cell
 def _(mo):
     text_input = mo.ui.text(label="YouTube URL")
-    text_input
+
+    mo.md(f"""
+    Fill in the YouTube URL or pass the video id here: 
+
+    {text_input} 
+    """).batch(text_input=text_input).form()
     return (text_input,)
 
 
 @app.cell
-def _(text_input):
-    f"{text_input.value[-11:]}.m4a"
+def _(download_yt, mo, text_input):
+    with mo.status.spinner(subtitle="Downloading ...") as _spinner:
+        if text_input.value:
+            download_yt(text_input.value)
     return
 
 
 @app.cell
-def _(download_yt, text_input):
-    if text_input.value:
-        download_yt(text_input.value)
-    return
-
-
-@app.cell
-def _(text_input):
+def _(mo, text_input):
     import whisper
 
-    model = whisper.load_model("base")
-    result = model.transcribe(f"{text_input.value[-11:]}.m4a")
-    print(result["text"])
+    with mo.status.spinner(subtitle="Running Whisper ...") as _spinner:
+        model = whisper.load_model("base")
+        result = model.transcribe(f"{text_input.value[-11:]}.m4a")
     return model, result, whisper
 
 
@@ -125,30 +126,16 @@ def _(instructor):
 
 
 @app.cell
-def _(YouTubeOutput, client, info, result):
-    response = client.chat.completions.create(
-        model="claude-3-5-sonnet-20241022",
-        messages=[
-            {
-                "role": "user",
-                "content": f"Create a proper summary of the following keyboard review. This is the title: {info['title']}. This is the text for the full review: {result['text']}",
-            }
-        ],
-        max_tokens=1500,
-        response_model=YouTubeOutput,
-    )
-    return (response,)
-
-
-@app.cell
-def _(response):
-    response.keyboard_name
-    return
-
-
-@app.cell
-def _(info, response, text_input):
-    from mohtml import pre, p, code
+def _(
+    CopyToClipboard,
+    YouTubeOutput,
+    client,
+    info,
+    mo,
+    result,
+    text_input,
+):
+    from mohtml import pre, p, code, div
     from jinja2 import Template
 
     template = Template("""
@@ -161,7 +148,9 @@ def _(info, response, text_input):
 
     ## {{tldr}}
 
+
     <iframe width="100%" height="500" src="https://www.youtube.com/embed/{{video_idx}}" title="YouTube video player" frameborder="0" allow="accelerometer; autoplay; clipboard-write; encrypted-media; gyroscope; picture-in-picture; web-share" referrerpolicy="strict-origin-when-cross-origin" allowfullscreen></iframe>
+
 
     {{summary}}
 
@@ -178,21 +167,53 @@ def _(info, response, text_input):
     """)
 
 
-    template.render(
-        summary=response.summary, 
-        pros=response.pros, 
-        cons=response.cons,
-        title=info["title"], 
-        thumbnail=info["thumbnail"],
-        keyboard_name=response.keyboard_name,
-        tldr=response.tldr, 
-        video_idx=f"{text_input.value[-11:]}"
+    with mo.status.spinner(subtitle="Running LLM ...") as _spinner:
+        response = client.chat.completions.create(
+            model="claude-3-5-sonnet-20241022",
+            messages=[
+                {
+                    "role": "user",
+                    "content": f"Create a proper summary of the following keyboard review. This is the title: {info['title']}. This is the text for the full review: {result['text']}",
+                }
+            ],
+            max_tokens=1500,
+            response_model=YouTubeOutput,
+        )
+        rendered = template.render(
+            summary=response.summary, 
+            pros=response.pros, 
+            cons=response.cons,
+            title=info["title"], 
+            thumbnail=info["thumbnail"],
+            keyboard_name=response.keyboard_name,
+            tldr=response.tldr, 
+            video_idx=f"{text_input.value[-11:]}"
+        )
+        clipboard_btn = CopyToClipboard(rendered)
+
+    rendered
+    return (
+        Template,
+        clipboard_btn,
+        code,
+        div,
+        p,
+        pre,
+        rendered,
+        response,
+        template,
     )
-    return Template, code, p, pre, template
 
 
 @app.cell
 def _():
+    from wigglystuff import CopyToClipboard
+    return (CopyToClipboard,)
+
+
+@app.cell
+def _(clipboard_btn):
+    clipboard_btn
     return
 
 

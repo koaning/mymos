@@ -1,5 +1,5 @@
 # /// script
-# requires-python = ">=3.10"
+# requires-python = ">=3.12"
 # dependencies = [
 #     "anthropic==0.45.2",
 #     "instructor==1.7.2",
@@ -7,7 +7,7 @@
 #     "marimo",
 #     "matplotlib==3.10.0",
 #     "mohtml==0.1.2",
-#     "openai-whisper==20240930",
+#     "openai-whisper",
 #     "opencv-python==4.11.0.86",
 #     "pydantic==2.10.6",
 #     "python-dotenv==1.0.1",
@@ -24,7 +24,6 @@ app = marimo.App()
 
 @app.cell
 def _():
-    import marimo as mo
     import matplotlib.pylab as plt
     import cv2
     from yt_dlp import YoutubeDL
@@ -33,6 +32,7 @@ def _():
     def download_yt(yt_url: str): 
         yt_id = yt_url[-11:]
         video_path = f"{yt_id}.m4a"
+
         ydl_opts = {
             'format': 'm4a/bestaudio/best',
             'postprocessors': [{
@@ -43,13 +43,20 @@ def _():
 
         if not Path(video_path).exists():
             URLS = [yt_url]
-            with YoutubeDL() as ydl:
+            with YoutubeDL(ydl_opts) as ydl:
                 ydl.download(URLS)
-            video_file = list(Path().glob("*.mp4"))[0]
-            video_file.rename(video_path)
+            for vid in Path().glob("*.m4a"):
+                if yt_id in str(vid):
+                    vid.rename(video_path)
         else:
             print("Video has been downloaded already")
-    return Path, YoutubeDL, cv2, download_yt, mo, plt
+    return Path, YoutubeDL, cv2, download_yt, plt
+
+
+@app.cell
+def _():
+    import marimo as mo
+    return (mo,)
 
 
 @app.cell
@@ -60,6 +67,8 @@ def _(mo):
     Fill in the YouTube URL or pass the video id here: 
 
     {text_input} 
+
+    In our experience sofar it can help to make sure that you are downloading a video that is set to "public". Unlisted videos caused download errors in the past. 
     """).batch(text_input=text_input).form()
     return (text_input,)
 
@@ -123,6 +132,12 @@ def _(instructor):
         Anthropic(api_key=os.environ["ANTHROPIC_API_KEY"]),
     )
     return Anthropic, Instructor, Mode, client, load_dotenv, os, patch
+
+
+@app.cell
+def _(mo):
+    mo.md("Once the downloading/parsing/generating is done, you can see the results below together with a 'copy to clipboard' button.")
+    return
 
 
 @app.cell

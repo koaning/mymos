@@ -7,28 +7,24 @@
 #     "marimo",
 #     "matplotlib==3.10.0",
 #     "mohtml==0.1.2",
-#     "openai-whisper",
+#     "openai-whisper==20240930",
 #     "opencv-python==4.11.0.86",
 #     "pydantic==2.10.6",
 #     "python-dotenv==1.0.1",
 #     "wigglystuff==0.1.9",
 #     "yt-dlp==2025.1.26",
+#     "numba==0.61.0",
 # ]
 # ///
 
 import marimo
 
-__generated_with = "0.10.19"
+__generated_with = "0.11.9"
 app = marimo.App()
 
 
 @app.cell
-def _():
-    import matplotlib.pylab as plt
-    import cv2
-    from yt_dlp import YoutubeDL
-    from pathlib import Path
-
+def _(Path, YoutubeDL):
     def download_yt(yt_url: str): 
         yt_id = yt_url[-11:]
         video_path = f"{yt_id}.m4a"
@@ -50,7 +46,32 @@ def _():
                     vid.rename(video_path)
         else:
             print("Video has been downloaded already")
-    return Path, YoutubeDL, cv2, download_yt, plt
+    return (download_yt,)
+
+
+@app.cell
+def _(mo):
+    with mo.status.spinner("Loading libraries"):
+        import matplotlib.pylab as plt
+        import cv2
+        from yt_dlp import YoutubeDL
+        from pathlib import Path
+        from instructor import Instructor, Mode, patch
+        from anthropic import Anthropic
+        from dotenv import load_dotenv
+        import os
+    return (
+        Anthropic,
+        Instructor,
+        Mode,
+        Path,
+        YoutubeDL,
+        cv2,
+        load_dotenv,
+        os,
+        patch,
+        plt,
+    )
 
 
 @app.cell
@@ -120,36 +141,23 @@ def _():
 
 
 @app.cell
-def _(instructor):
-    from instructor import Instructor, Mode, patch
-    from anthropic import Anthropic
-    from dotenv import load_dotenv
-    import os
-
+def _(Anthropic, instructor, load_dotenv, os):
     load_dotenv(".env")
 
     client = instructor.from_anthropic(
         Anthropic(api_key=os.environ["ANTHROPIC_API_KEY"]),
     )
-    return Anthropic, Instructor, Mode, client, load_dotenv, os, patch
+    return (client,)
 
 
 @app.cell
 def _(mo):
-    mo.md("Once the downloading/parsing/generating is done, you can see the results below together with a 'copy to clipboard' button.")
+    mo.md("""Once the downloading/parsing/generating is done, you can see the results below together with a 'copy to clipboard' button.""")
     return
 
 
 @app.cell
-def _(
-    CopyToClipboard,
-    YouTubeOutput,
-    client,
-    info,
-    mo,
-    result,
-    text_input,
-):
+def _(CopyToClipboard, YouTubeOutput, client, info, mo, result, text_input):
     from mohtml import pre, p, code, div
     from jinja2 import Template
 
@@ -205,8 +213,6 @@ def _(
             video_idx=f"{text_input.value[-11:]}"
         )
         clipboard_btn = CopyToClipboard(rendered)
-
-    rendered
     return (
         Template,
         clipboard_btn,
@@ -224,6 +230,18 @@ def _(
 def _():
     from wigglystuff import CopyToClipboard
     return (CopyToClipboard,)
+
+
+@app.cell
+def _(pre, rendered):
+    import textwrap
+
+    pre(
+        rendered.replace('height="500"', 'height="300"'), 
+        style="max-width: 600px; white-space: pre-wrap;", 
+        klass="text-xs"
+    )
+    return (textwrap,)
 
 
 @app.cell
